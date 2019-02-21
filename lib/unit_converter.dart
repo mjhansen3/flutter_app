@@ -1,45 +1,38 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
 
+import 'api.dart';
+import 'category.dart';
 import 'unit.dart';
 
 const _padding = EdgeInsets.all(16.0);
 
-// [ConverterRoute] where users can input amounts to convert in one [Unit]
-// and retrieve the conversion in another [Unit] for a specific [Category].
-//
-// While it is named ConverterRoute, a more apt name would be ConverterScreen,
-// because it is responsible for the UI at the route's destination.
-class ConverterRoute extends StatefulWidget {
-  // This [Category]'s name.
-  final String name;
+/// [UnitConverter] where users can input amounts to convert in one [Unit]
+/// and retrieve the conversion in another [Unit] for a specific [Category].
+class UnitConverter extends StatefulWidget {
+  /// The current [Category] for unit conversion.
+  final Category category;
 
-  // Color for this [Category].
-  final Color color;
-
-  // Units for this [Category].
-  final List<Unit> units;
-
-  // This [ConverterRoute] requires the name, color, and units to not be null.
-  const ConverterRoute({
-    @required this.name,
-    @required this.color,
-    @required this.units,
-  })  : assert(name != null),
-        assert(color != null),
-        assert(units != null);
+  /// This [UnitConverter] takes in a [Category] with [Units]. It can't be null.
+  const UnitConverter({
+    @required this.category,
+  }) : assert(category != null);
 
   @override
-  _ConverterRouteState createState() => _ConverterRouteState();
+  _UnitConverterState createState() => _UnitConverterState();
 }
 
-class _ConverterRouteState extends State<ConverterRoute> {
+class _UnitConverterState extends State<UnitConverter> {
   Unit _fromValue;
   Unit _toValue;
   double _inputValue;
   String _convertedValue = '';
   List<DropdownMenuItem> _unitMenuItems;
   bool _showValidationError = false;
+  final _inputKey = GlobalKey(debugLabel: 'inputText');
+  bool _showErrorUI = false;
 
   @override
   void initState() {
@@ -48,10 +41,20 @@ class _ConverterRouteState extends State<ConverterRoute> {
     _setDefaults();
   }
 
-  // Creates fresh list of [DropdownMenuItem] widgets, given a list of [Unit]s.
+  @override
+  void didUpdateWidget(UnitConverter old) {
+    super.didUpdateWidget(old);
+    // We update our [DropdownMenuItem] units when we switch [Categories].
+    if (old.category != widget.category) {
+      _createDropdownMenuItems();
+      _setDefaults();
+    }
+  }
+
+  /// Creates fresh list of [DropdownMenuItem] widgets, given a list of [Unit]s.
   void _createDropdownMenuItems() {
     var newItems = <DropdownMenuItem>[];
-    for (var unit in widget.units) {
+    for (var unit in widget.category.units) {
       newItems.add(DropdownMenuItem(
         value: unit.name,
         child: Container(
@@ -67,15 +70,19 @@ class _ConverterRouteState extends State<ConverterRoute> {
     });
   }
 
-  // Sets the default values for the 'from' and 'to' [Dropdown]s.
+  /// Sets the default values for the 'from' and 'to' [Dropdown]s, and the
+  /// updated output value if a user had previously entered an input.
   void _setDefaults() {
     setState(() {
-      _fromValue = widget.units[0];
-      _toValue = widget.units[1];
+      _fromValue = widget.category.units[0];
+      _toValue = widget.category.units[1];
     });
+    if (_inputValue != null) {
+      _updateConversion();
+    }
   }
 
-  // Clean up conversion; trim trailing zeros, e.g. 5.500 -> 5.5, 10.0 -> 10
+  /// Clean up conversion; trim trailing zeros, e.g. 5.500 -> 5.5, 10.0 -> 10
   String _format(double conversion) {
     var outputNum = conversion.toStringAsPrecision(7);
     if (outputNum.contains('.') && outputNum.endsWith('0')) {
@@ -91,11 +98,30 @@ class _ConverterRouteState extends State<ConverterRoute> {
     return outputNum;
   }
 
-  void _updateConversion() {
-    setState(() {
-      _convertedValue =
-          _format(_inputValue * (_toValue.conversion / _fromValue.conversion));
-    });
+  Future<void> _updateConversion() async {
+    // Our API has a handy convert function, so we can use that for
+    // the Currency [Category]
+    if (widget.category.name == apiCategory['name']) {
+      final api = Api();
+      final conversion = await api.convert(apiCategory['route'],
+          _inputValue.toString(), _fromValue.name, _toValue.name);
+      // API error or not connected to the internet
+      if (conversion == null) {
+        setState(() {
+          _showErrorUI = true;
+        });
+      } else {
+        setState(() {
+          _convertedValue = _format(conversion);
+        });
+      }
+    } else {
+      // For the static units, we do the conversion ourselves
+      setState(() {
+        _convertedValue = _format(
+            _inputValue * (_toValue.conversion / _fromValue.conversion));
+      });
+    }
   }
 
   void _updateInputValue(String input) {
@@ -119,7 +145,7 @@ class _ConverterRouteState extends State<ConverterRoute> {
   }
 
   Unit _getUnit(String unitName) {
-    return widget.units.firstWhere(
+    return widget.category.units.firstWhere(
           (Unit unit) {
         return unit.name == unitName;
       },
@@ -179,6 +205,38 @@ class _ConverterRouteState extends State<ConverterRoute> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.category.units == null ||
+        (widget.category.name == apiCategory['name'] && _showErrorUI)) {
+      return SingleChildScrollView(
+        child: Container(
+          margin: _padding,
+          padding: _padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16.0),
+            color: widget.category.color['error'],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 180.0,
+                color: Colors.white,
+              ),
+              Text(
+                "Oh no! We can't connect right now!",
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headline.copyWith(
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final input = Padding(
       padding: _padding,
       child: Column(
@@ -188,6 +246,7 @@ class _ConverterRouteState extends State<ConverterRoute> {
           // accepts numbers and calls the onChanged property on update.
           // You can read more about it here: https://flutter.io/text-input
           TextField(
+            key: _inputKey,
             style: Theme.of(context).textTheme.display1,
             decoration: InputDecoration(
               labelStyle: Theme.of(context).textTheme.display1,
@@ -238,8 +297,7 @@ class _ConverterRouteState extends State<ConverterRoute> {
       ),
     );
 
-    final converter = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final converter = ListView(
       children: [
         input,
         arrows,
@@ -247,9 +305,24 @@ class _ConverterRouteState extends State<ConverterRoute> {
       ],
     );
 
+    // Based on the orientation of the parent widget, figure out how to best
+    // lay out our converter.
     return Padding(
       padding: _padding,
-      child: converter,
+      child: OrientationBuilder(
+        builder: (BuildContext context, Orientation orientation) {
+          if (orientation == Orientation.portrait) {
+            return converter;
+          } else {
+            return Center(
+              child: Container(
+                width: 450.0,
+                child: converter,
+              ),
+            );
+          }
+        },
+      ),
     );
   }
 }

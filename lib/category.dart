@@ -1,61 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
 
-final _rowHeight = 100.0;
-final _borderRadius = BorderRadius.circular(_rowHeight / 2);
+import 'unit.dart';
 
-class CustomListView extends StatelessWidget {
-
+/// A [Category] keeps track of a list of [Unit]s.
+class Category {
   final String name;
   final ColorSwatch color;
-  final IconData iconLocation;
+  final List<Unit> units;
+  final String iconLocation;
 
-  const CustomListView ({
-    Key key,
+  /// Information about a [Category].
+  ///
+  /// A [Category] saves the name of the Category (e.g. 'Length'), a list of its
+  /// its color for the UI, units for conversions (e.g. 'Millimeter', 'Meter'),
+  /// and the icon that represents it (e.g. a ruler).
+  const Category({
     @required this.name,
     @required this.color,
+    @required this.units,
     @required this.iconLocation,
   })  : assert(name != null),
         assert(color != null),
-        assert(iconLocation != null),
-        super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: _rowHeight,
-          child: InkWell(
-            highlightColor: color,
-            splashColor: color,
-            onTap: () {
-              print('I was tapped!');
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Icon(
-                      iconLocation,
-                      size: 60.0,
-                    ),
-                  ),
-                  Center(
-                      child: Text(
-                        name,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headline,
-                      )
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ),
-    );
-  }
+        assert(units != null),
+        assert(iconLocation != null);
 }
